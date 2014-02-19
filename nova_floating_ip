@@ -1,8 +1,7 @@
 #!/usr/bin/python
 #coding: utf-8 -*-
 
-# (c) 2013, Benno Joy <benno@ansible.com>
-# (c) 2013, John Dewey <john@dewey.ws>
+# (c) 2014, Wes Hayutin <weshayutin@gmail.com> 
 #
 # This module is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -90,24 +89,23 @@ def _create_floating_ip(module, nova):
 def _assign_floating_ip(module, nova, floating_ip):
     name = None
     server_list = None
-    instance_name =  module.params['name']
-    server_list = nova.servers.list(True, {'name': instance_name})
+    server_list = nova.servers.list(True, {'name': module.params['instance_name']})
     if server_list:
         #server = [x for x in server_list if x.name == module.params['name']]
-        instance = nova.servers.find(name=instance_name)
+        instance = nova.servers.find(name=module.params['instance_name'])
         try:
             result = instance.add_floating_ip(floating_ip)
         except Exception, e:
             module.fail_json(msg="There was an error in updating the floating ip address: %s" % e.message)
-        module.exit_json(changed=True, result="Floating ip %s associated with instance %s" % (floating_ip.ip, instance_name) )
+        module.exit_json(changed=True, result="Floating ip %s associated with instance %s" % (floating_ip.ip, imodule.params['instance_name']) )
 
 def _get_server_public_ip(module, nova):
     server = None
     public = []
     try:
-        servers = nova.servers.list(True, {'name': module.params['name']})
+        servers = nova.servers.list(True, {'name': module.params['instance_name']})
         if servers:
-            server = [x for x in servers if x.name == module.params['name']][0]
+            server = [x for x in servers if x.name == module.params['instance_name']][0]
     except Exception, e:
         module.fail_json(msg = "Error in getting the server list: %s" % e.message)
     if server and module.params['state'] == 'present':
@@ -124,12 +122,8 @@ def main():
         login_password                  = dict(required=True),
         login_tenant_name               = dict(required='True'),
         auth_url                        = dict(default='http://127.0.0.1:35357/v2.0/'),
-        region_name                     = dict(default=None),
-        name                            = dict(required=True),
         network_name                 = dict(required=True),
-        security_groups                 = dict(default='default'),
-        nics                            = dict(default=None),
-        meta                            = dict(default=None),
+        instance_name                   = dict(required=True),
         state                           = dict(default='present', choices=['absent', 'present'])
         ),
     )

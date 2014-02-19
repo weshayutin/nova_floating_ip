@@ -67,16 +67,6 @@ options:
         - Name that has to be given to the instance
      required: true
      default: None
-   nics:
-     description:
-        - A list of network id's to which the VM's interface should be attached
-     required: false
-     default: None
-   meta:
-     description:
-        - A list of key value pairs that should be provided as a metadata to the new VM
-     required: false
-     default: None
 requirements: ["novaclient"]
 '''
 
@@ -88,9 +78,6 @@ EXAMPLES = '''
        login_password: admin
        login_tenant_name: admin
        name: vm1
-       meta:
-         hostname: test1
-         group: uge_master
 '''
 
 def _create_floating_ip(module, nova):
@@ -113,6 +100,22 @@ def _assign_floating_ip(module, nova, floating_ip):
         except Exception, e:
             module.fail_json(msg="There was an error in updating the floating ip address: %s" % e.message)
         module.exit_json(changed=True, result="Floating ip %s associated with instance %s" % (floating_ip.ip, instance_name) )
+
+def _get_server_public_ip(module, nova):
+    server = None
+    public = []
+    try:
+        servers = nova.servers.list(True, {'name': module.params['name']})
+        if servers:
+            server = [x for x in servers if x.name == module.params['name']][0]
+    except Exception, e:
+        module.fail_json(msg = "Error in getting the server list: %s" % e.message)
+    if server and module.params['state'] == 'present':
+        if server.status != 'ACTIVE':
+            module.fail_json( msg="The VM is available but not Active. state:" + server.status)
+        public  = [ x['addr'] for x in getattr(server, 'addresses').itervalues().next() if 'OS-EXT-IPS:type' in x and x['OS-EXT-IPS:type'] == 'floating']
+        #module.exit_json(changed=True, result="Public ip  %s " % (public) )
+    return public
 
 def main():
     module = AnsibleModule(
@@ -143,12 +146,14 @@ def main():
     except exc.AuthorizationFailure, e:
         module.fail_json(msg = "Unable to authorize user: %s" % e.message)
 
-    #if module.params['state'] == 'absent':
-        #_get_server_state(module, nova)
-    floating_ip = _create_floating_ip(module, nova)
-    if floating_ip:
-        _assign_floating_ip(module, nova, floating_ip)
-    
+    #_get_server_public_ip(module, nova)
+    if not _get_server_public_ip(module, nova):
+        floating_ip = _create_floating_ip(module, nova)
+        if floating_ip:
+            _assign_floating_ip(module, nova, floating_ip)
+    else:
+        module.exit_json(changed=False)
+
 
 # this is magic, see lib/ansible/module.params['common.py
 from ansible.module_utils.basic import *

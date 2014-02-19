@@ -26,7 +26,7 @@ except ImportError:
 DOCUMENTATION = '''
 ---
 module: nova_floating_ip
-version_added: "1.2"
+version_added: ".1"
 short_description: Create and assign a floating ip
 description:
    - Create and assign a floating ip
@@ -51,17 +51,12 @@ options:
         - The keystone url for authentication
      required: false
      default: 'http://127.0.0.1:35357/v2.0/'
-   region_name:
-     description:
-        - Name of the region
-     required: false
-     default: None
    state:
      description:
         - Indicate desired state of the resource
      choices: ['present', 'absent']
      default: present
-   name:
+   instance_name:
      description:
         - Name that has to be given to the instance
      required: true
@@ -70,13 +65,14 @@ requirements: ["novaclient"]
 '''
 
 EXAMPLES = '''
-# Creates a new VM and attaches to a network and passes metadata to the instance
+# Creates a new floating ip address and assigns it to the instance if one is not already assigned.
 - nova_floating_ip:
        state: present
        login_username: admin
        login_password: admin
        login_tenant_name: admin
-       name: vm1
+       network_name: public
+       instance_name: vm1
 '''
 
 def _create_floating_ip(module, nova):
@@ -91,7 +87,6 @@ def _assign_floating_ip(module, nova, floating_ip):
     server_list = None
     server_list = nova.servers.list(True, {'name': module.params['instance_name']})
     if server_list:
-        #server = [x for x in server_list if x.name == module.params['name']]
         instance = nova.servers.find(name=module.params['instance_name'])
         try:
             result = instance.add_floating_ip(floating_ip)
@@ -112,7 +107,6 @@ def _get_server_public_ip(module, nova):
         if server.status != 'ACTIVE':
             module.fail_json( msg="The VM is available but not Active. state:" + server.status)
         public  = [ x['addr'] for x in getattr(server, 'addresses').itervalues().next() if 'OS-EXT-IPS:type' in x and x['OS-EXT-IPS:type'] == 'floating']
-        #module.exit_json(changed=True, result="Public ip  %s " % (public) )
     return public
 
 def main():
@@ -140,7 +134,6 @@ def main():
     except exc.AuthorizationFailure, e:
         module.fail_json(msg = "Unable to authorize user: %s" % e.message)
 
-    #_get_server_public_ip(module, nova)
     if not _get_server_public_ip(module, nova):
         floating_ip = _create_floating_ip(module, nova)
         if floating_ip:
@@ -148,8 +141,6 @@ def main():
     else:
         module.exit_json(changed=False)
 
-
-# this is magic, see lib/ansible/module.params['common.py
 from ansible.module_utils.basic import *
 main()
 
